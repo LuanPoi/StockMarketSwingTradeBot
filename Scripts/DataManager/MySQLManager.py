@@ -1,8 +1,9 @@
 import math
+from collections import defaultdict
+
 import numpy as np
 
 from datetime import datetime
-from Scripts.DataManager import Interface_DBManager
 
 import sys
 from datetime import datetime
@@ -53,7 +54,7 @@ class MySQLManager():
             if verbose:
                 print("Indice [" + str(index) + "]: ", end="")
                 print(dayStockValue['Open'], dayStockValue['High'], dayStockValue['Low'], dayStockValue['Close'], dayStockValue['Adj Close'], dayStockValue['Volume'], sep="\t")
-            data_dict = {}
+            data_dict = defaultdict(any)
             data_dict['ticker'] = ticker
             data_dict['date'] = datetime.date(index)
             data_dict['open'] = dayStockValue['Open']
@@ -80,10 +81,14 @@ class MySQLManager():
         return self.db_cursor.rowcount
 
     def read(self, table_name, ticker, where_condition,verbose):
-        # TODO: Fazer função de leitura do banco de dados;
         result = {}
         try:
-            sql_select_Query = "select " + "ticker, date, adj_close" + " from " + self.DB_NAME + "." + table_name + " where ticker = \"" + ticker + "\"  and date >= 2020-01-01;"
+            sql_select_Query = "select " + "ticker, date, adj_close" + " from " + self.DB_NAME + "." + table_name + " where ticker = \"" + ticker + "\" "
+
+            if where_condition is None:
+                sql_select_Query = sql_select_Query + ";"
+            else:
+                sql_select_Query = sql_select_Query + " AND " + where_condition + ";"
 
             self.db_cursor.execute(sql_select_Query)
             records = self.db_cursor.fetchall()
@@ -95,7 +100,7 @@ class MySQLManager():
                 else:
                     print("Wrong ticker.")
                     sys.exit(-2)
-
+            sql_select_Query = None
         except Error as e:
             print("Error reading data from MySQL table", e)
         finally:

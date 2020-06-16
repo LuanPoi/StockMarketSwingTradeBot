@@ -1,10 +1,15 @@
+from pandas import DataFrame
+
 from Scripts.DataManager.MySQLManager import MySQLManager
 from Scripts.DataManager.YahooAPIHandler import YahooAPIHandler
+from Scripts.DataManager.BaseLines import average, seasonal_naive, drift
 
 from datetime import datetime
 import math
 import matplotlib.pyplot as plt
 from statsmodels.tsa.api import ExponentialSmoothing, SimpleExpSmoothing, Holt
+from statsmodels.iolib.table import SimpleTable
+from statsmodels.tools.eval_measures import rmse, meanabs
 import mysql.connector
 import numpy as np
 import pandas as pd
@@ -14,36 +19,73 @@ import yfinance as yf
 
 def run():
     # Definindo ticker
-    ticker = {"Inter": "BIDI4.SA", "Petrobras": "PETR4.SA", "Vale": "VALE3.SA", "Itau": "ITUB4.SA",
+    ticker = {"Inter": "BIDI4.SA",
+              "Petrobras": "PETR4.SA",
+              "Vale": "VALE3.SA",
+              "Itau": "ITUB4.SA",
               "Ambev": "ABEV3.SA",
-              "Sinqia": "SQIA3.SA", "iShares_Bovespa": "BOVA11.SA"}
+              "Sinqia": "SQIA3.SA",
+              "iShares_Bovespa": "BOVA11.SA"}
 
     currentTicker = ticker['Itau']
 
     mySQLManager = MySQLManager("localhost", "root", "toor")
+
     mySQLManager.connect("stock_market")
+    dataSet = mySQLManager.read(table_name="stock", ticker=currentTicker, where_condition="date < \'2019-07-12\'", verbose=False)
 
-    timeSerieValues = []
-    timeSerieIndex = []
-    for k, v in mySQLManager.read(table_name="stock", ticker=currentTicker, where_condition=None, verbose=False).items():
-        timeSerieValues.append(float("{:7.5f}".format(v)))
-        timeSerieIndex.append(k.strftime("%Y-%m-%d"))
+    values = [float(x) for x in dataSet.values()]
+    timeSerie = pd.Series(data=values, index=dataSet.keys(), name=str(currentTicker)+" stock time serie")
 
-    yf.pdr_override()
-    DataFrame = pd.Series(data=timeSerieValues)  #, index=pd.DatetimeIndex(timeSerieIndex))
+    fit1 = ExponentialSmoothing(timeSerie.values, seasonal_periods=5, trend='add', seasonal='add', damped=True).fit(use_boxcox=False)
+    forecast = [x for x in fit1.forecast(120)]
+
+    mySQLManager = None
+    mySQLManager = MySQLManager("localhost", "root", "toor")
+    mySQLManager.connect("stock_market")
+    true_values = mySQLManager.read(table_name="stock", ticker=currentTicker,
+                                    where_condition="date >= \'2019-07-12\' limit 120", verbose=False)
 
 
-    fit1 = ExponentialSmoothing(DataFrame, seasonal_periods=5, trend='add', seasonal='add').fit(use_boxcox=False)
-    results = pd.DataFrame(index=[r"$\alpha$", r"$\beta$", r"$\phi$", r"$\gamma$", r"$l_0$", "$b_0$", "SSE"])
-    params = ['smoothing_level', 'smoothing_slope', 'damping_slope', 'smoothing_seasonal', 'initial_level', 'initial_slope']
-    results["Additive"] = [fit1.params[p] for p in params] + [fit1.sse]
-    ax = DataFrame.plot(figsize=(10, 6), marker='o', color='black',
-                        title="Forecasts from Holt-Winters' multiplicative method")
-    ax.set_ylabel("Stock price (R$)")
-    ax.set_xlabel("Date")
-    fit1.fittedvalues.plot(ax=ax, style='--', color='red')
-    plt.show()
 
+
+
+
+    #forecastOnTheTable = SimpleTable(data=[str(x) for x in forecast], title=str(currentTicker)+" stock time serie")
+    #print(forecastOnTheTable.as_text())
+
+
+
+
+
+    plt.plot([x for x in true_values.values()], '-k')
+    plt.plot(forecast, '-g')
+    plt.plot(average(timeSerie, 120), '-r')
+    plt.plot(seasonal_naive(timeSerie, 5, 120), '-b')
+    plt.plot(drift(timeSerie, 120), '-y')
+
+
+
+
+
+
+    print("\tPrediction model\t\t|\tRMSE\t\t\t\t|\tMAE")
+    print("\t---------------------------------------------------------------------")
+    print("\tExponentialSmoothing", end="\t|\t")
+    print(rmse([float(x) for x in true_values.values()], forecast), end="\t|\t")
+    print(meanabs([float(x) for x in true_values.values()], forecast))
+
+    print("\tSeasonal Naive", end="\t\t\t|\t")
+    print(rmse([float(x) for x in seasonal_naive(timeSerie, 5, 120)], forecast), end="\t|\t")
+    print(meanabs([float(x) for x in true_values.values()], seasonal_naive(timeSerie, 5, 120)))
+
+    print("\tDrift", end="\t\t\t\t\t|\t")
+    print(rmse([float(x) for x in true_values.values()], drift(timeSerie, 120)), end="\t|\t")
+    print(meanabs([float(x) for x in true_values.values()], drift(timeSerie, 120)))
+
+    print("\tAverage", end="\t\t\t\t\t|\t")
+    print(rmse([float(x) for x in true_values.values()], average(timeSerie, 120)), end="\t|\t")
+    print(meanabs([float(x) for x in true_values.values()], average(timeSerie, 120)))
 
 if __name__ == "__main__":
     run()

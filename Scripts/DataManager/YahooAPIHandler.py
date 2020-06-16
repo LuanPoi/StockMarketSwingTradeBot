@@ -1,5 +1,3 @@
-from Scripts.DataManager import Interface_APIHandler
-
 from datetime import datetime
 import math
 import matplotlib.pyplot as plt
