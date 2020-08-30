@@ -8,6 +8,7 @@ from datetime import datetime
 import math
 import matplotlib.pyplot as plt
 from statsmodels.tsa.api import ExponentialSmoothing, SimpleExpSmoothing, Holt
+from statsmodels.tsa.api import ARIMA
 from statsmodels.iolib.table import SimpleTable
 from statsmodels.tools.eval_measures import rmse, meanabs
 import mysql.connector
@@ -15,6 +16,7 @@ import numpy as np
 import pandas as pd
 import pandas_datareader as pdr
 import yfinance as yf
+from stockstats import StockDataFrame
 
 
 def run():
@@ -40,11 +42,20 @@ def run():
     fit1 = ExponentialSmoothing(timeSerie.values, seasonal_periods=5, trend='add', seasonal='add', damped=True).fit(use_boxcox=False)
     forecast = [x for x in fit1.forecast(120)]
 
+    #fit1_arima = ARIMA(endog, order, exog=None, dates=None, freq=None, missing='none')
+    #fit1_arima = ARIMA(data=values,)
+
     mySQLManager = None
     mySQLManager = MySQLManager("localhost", "root", "toor")
     mySQLManager.connect("stock_market")
     true_values = mySQLManager.read(table_name="stock", ticker=currentTicker,
                                     where_condition="date >= \'2019-07-12\' limit 120", verbose=False)
+
+
+    #stockstats
+    #open, close, high, low, volume, amount.
+    dataFrame = pd.read_csv('/home/andromeda/programacao/TCC/StockMarketSwingTradeBot/Resources/Datasets/stock_market_stock.csv')
+    stock = StockDataFrame.retype(dataFrame)
 
 
 
