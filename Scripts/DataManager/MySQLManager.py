@@ -80,10 +80,19 @@ class MySQLManager():
         self.db_connection.close()
         return self.db_cursor.rowcount
 
-    def read(self, table_name, ticker, where_condition,verbose):
+    def read(self, table_name, select_items: list, ticker, where_condition,verbose):
+        # TODO: Fazer funcionar direto com query e retornar em formato de DataFrame
         result = {}
+        selects = ""
+        toggle = True
+        for item in select_items:
+            if toggle:
+                selects = selects + str(item)
+                toggle = False
+            else:
+                selects = selects + ", " + str(item)
         try:
-            sql_select_Query = "select " + "ticker, date, adj_close" + " from " + self.DB_NAME + "." + table_name + " where ticker = \"" + ticker + "\" "
+            sql_select_Query = "select " + selects + " from " + self.DB_NAME + "." + table_name + " where ticker = \"" + ticker + "\" "
 
             if where_condition is None:
                 sql_select_Query = sql_select_Query + ";"
@@ -91,22 +100,20 @@ class MySQLManager():
                 sql_select_Query = sql_select_Query + " AND " + where_condition + ";"
 
             self.db_cursor.execute(sql_select_Query)
-            records = self.db_cursor.fetchall()
-            for row in records:
-                if row[0] == ticker:
-                    if verbose:
-                        print("Date = " + row[1].strftime("%Y-%m-%d") + "\tadj_close  = " + str(row[2]))
-                    result[row[1]] = row[2]
-                else:
-                    print("Wrong ticker.")
-                    sys.exit(-2)
+            processed_data = []
+            indexes = []
+            for record in  self.db_cursor.fetchall():
+                processed_data.append(float(record[2]))
+                indexes.append(record[1])
             sql_select_Query = None
+            result = pd.DataFrame(data=processed_data, index=indexes, columns=['value'])
         except Error as e:
             print("Error reading data from MySQL table", e)
         finally:
             if self.db_connection.is_connected():
                 self.db_connection.close()
                 self.db_cursor.close()
+        result.add_prefix(str(ticker) + '_')
         return result
 
     def update(self, table_name, data, where_condition):
