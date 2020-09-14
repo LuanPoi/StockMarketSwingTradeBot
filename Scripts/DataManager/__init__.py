@@ -4,7 +4,11 @@ import Scripts.DataManager.YahooAPIHandler as YAPIH
 
 from datetime import datetime
 import pandas as pd
+import numpy as np
 from stockstats import StockDataFrame
+
+# TODO: Prioridade #1 - Entender como funciona e implementar XGBoost até quinta, se possivel aplicar o greedsearchCV também.
+
 
 tickers = {
         "Inter": "BIDI4.SA",
@@ -15,20 +19,6 @@ tickers = {
         "Sinqia": "SQIA3.SA",
         "iShares_Bovespa": "BOVA11.SA"
 }
-
-
-def run():
-    current_ticker = tickers['Itau']
-
-    # data_set = load_data(current_ticker)
-    # true_values = load_true_values(current_ticker)
-
-    # TODO: Remover o populate após implementar a requisição pelo banco e colocar a requisição aqui
-    raw_data = YAPIH.historical(ticker=tickers['Itau'])
-    training_data = populate_mysql(raw_data)
-    test_data = raw_data.drop(raw_data[raw_data.index < datetime(2020, 7, 31)].index, inplace=False)
-    Trainer.run(training_data, test_data.head(120))
-
 
 def load_data(ticker):
     mySQLManager = MySQLManager("localhost", "root", "toor")
@@ -45,13 +35,42 @@ def load_true_values(ticker):
                                     where_condition="date >= \'2019-07-12\' limit 120", verbose=False)
     return true_values
 
-def populate_mysql(raw_data):
-    # Pega os dados da api e remove aqueles alem do limite de data
-    raw_data.drop(raw_data[raw_data.index > datetime(2020,7,31)].index, inplace=True)
-    #calcula e adiciona os dados do stats_model no dataframe
-    processed_data = pd.concat([stock_stats(raw_data), raw_data], axis=1, sort=False)
-    # Todo: Fazer a inserção dos dados no MySQL
-    return processed_data
+def populate_mysql(tickers: dict):
+
+    toggle = True
+
+    for ticker in tickers.values():
+        raw_data = YAPIH.historical(str(ticker))
+
+        if toggle:
+            ticker_serie = pd.Series([str(ticker) for x in range(len(raw_data))], raw_data.index, name="ticker")
+            processed_data = pd.concat([ticker_serie, raw_data, stock_stats(raw_data)], axis=1, sort=False)
+
+            processed_data.replace([np.inf, -np.inf], np.nan, inplace=True)
+
+            training_data = processed_data.drop(processed_data[processed_data.index > datetime(2020,7,31)].index, inplace=False)
+            test_data = processed_data.drop(processed_data[processed_data.index <= datetime(2020,7,31)].index, inplace=False)
+
+            mySQLManager = MSQLM.MySQLManager("localhost", "root", "toor")
+            mySQLManager.connect('stock_market')
+            mySQLManager.create('stock', training_data, 'replace')
+            mySQLManager.connect('stock_market')
+            mySQLManager.create('stock_test', test_data, 'replace')
+            toggle = False
+        else:
+            ticker_serie = pd.Series([str(ticker) for x in range(len(raw_data))], raw_data.index, name="ticker")
+            processed_data = pd.concat([ticker_serie, raw_data, stock_stats(raw_data)], axis=1, sort=False)
+
+            processed_data.replace([np.inf, -np.inf], np.nan)
+
+            training_data = processed_data.drop(processed_data[processed_data.index > datetime(2020, 7, 31)].index, inplace=False)
+            test_data = processed_data.drop(processed_data[processed_data.index <= datetime(2020, 7, 31)].index, inplace=False)
+
+            mySQLManager = MSQLM.MySQLManager("localhost", "root", "toor")
+            mySQLManager.connect('stock_market')
+            mySQLManager.create('stock', training_data, 'append')
+            mySQLManager.connect('stock_market')
+            mySQLManager.create('stock_test', test_data, 'append')
 
 def stock_stats(data_frame: pd.DataFrame):
     stock = StockDataFrame.retype(data_frame)
@@ -159,6 +178,16 @@ def stock_stats(data_frame: pd.DataFrame):
     stats = pd.DataFrame(data)
 
     return stats
+
+def run():
+    mySQLManager = MSQLM.MySQLManager("localhost", "root", "toor")
+    mySQLManager.connect('stock_market')
+    data = mySQLManager.read('select * from stock where ticker=\'' + tickers['Inter'] + '\'')
+
+    training_data = data.drop(data.tail(120).index, inplace=False)
+    validation_data = data.tail(120)
+
+    Trainer.run(training_data, validation_data)
 
 if __name__ == "__main__":
     run()
