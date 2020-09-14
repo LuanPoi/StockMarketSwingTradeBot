@@ -24,6 +24,8 @@ from stockstats import StockDataFrame
 import Scripts.Tools.eval as eval
 from sklearn.model_selection import GridSearchCV
 
+import Scripts.DataManager.GSCV_tests as gst
+
 def ets(time_serie, Npt):
     #TODO: Fazer retornar os dados na forma de um pandas.Series
     ets_fit = ExponentialSmoothing(time_serie.values, seasonal_periods=5, trend='add', seasonal='add', damped=True).fit()
@@ -107,12 +109,14 @@ def run(training_data: pd.DataFrame, validation_data: pd.DataFrame):
                     index = validation_data.index
     )
 
-    debug(
-        validation_data= test_data_serie,
-        forecast_ets= ets(training_data_serie, 120),
-        forecast_arima= arima(training_data_serie, 120),
-        forecast_xgboost= xgboost(training_data, validation_data, 120),
-        forecast_snaive= seasonal_naive(training_data_serie, 5, 120),
-        forecast_drift= drift(training_data_serie, 120),
-        forecast_average= average(training_data_serie, 120)
-    )
+    # debug(
+    #     validation_data= test_data_serie,
+    #     forecast_ets= ets(training_data_serie, 120),
+    #     forecast_arima= arima(training_data_serie, 120),
+    #     forecast_xgboost= xgboost(training_data, validation_data, 120),
+    #     forecast_snaive= seasonal_naive(training_data_serie, 5, 120),
+    #     forecast_drift= drift(training_data_serie, 120),
+    #     forecast_average= average(training_data_serie, 120)
+    # )
+
+    gst.grid_xgboost(training_data, validation_data, 120)

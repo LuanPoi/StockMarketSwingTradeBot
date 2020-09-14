@@ -187,6 +187,9 @@ def run():
     training_data = data.drop(data.tail(120).index, inplace=False)
     validation_data = data.tail(120)
 
+    training_data.set_index('Date', inplace=True)
+    validation_data.set_index('Date', inplace=True)
+
     Trainer.run(training_data, validation_data)
 
 if __name__ == "__main__":
