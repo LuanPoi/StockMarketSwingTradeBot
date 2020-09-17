@@ -28,28 +28,47 @@ import Scripts.DataManager.GSCV_tests as gst
 
 def ets(time_serie, Npt):
     #TODO: Fazer retornar os dados na forma de um pandas.Series
-    ets_fit = ExponentialSmoothing(time_serie.values, seasonal_periods=5, trend='add', seasonal='add', damped=True).fit()
+    ets_fit = ExponentialSmoothing(time_serie.values, seasonal_periods=5, trend='mul', seasonal='add', damped=False).fit()
     forecast_ets = [x for x in ets_fit.forecast(Npt)]
     return forecast_ets
 
 def arima(time_serie, Npt):
     # TODO: Fazer retornar os dados na forma de um pandas.Series
-    arima_fit = ARIMA(time_serie.values, (1, 1, 1)).fit(disp=False)
+    arima_fit = ARIMA(time_serie.values, (0, 0, 1)).fit(disp=False)
     forecast_arima = [x for x in arima_fit.forecast(Npt)[0]] # [0]= predições
     return forecast_arima
 
 #XGB_Regressor
-def xgboost(training_data, validation_data, Npt):
+def xgboost(training_data, validation_data, ets, arima):
     # Warning: o XGBoost precisa receber as features do conjunto de validação mas você só consegue estes dados já tendo os dados da previsão.
 
     xgbr = xgb.XGBRegressor(objective ='reg:linear', verbosity=0)
     print(xgbr)
+
+    tudo = pd.concat([training_data, validation_data])
+    tudo['ets']= tudo['adj close']
+    tudo['arima'] = tudo['adj close']
+    tudo['ets'].loc[(len(tudo) - len(ets)):] = ets
+    tudo['arima'].loc[(len(tudo) - len(arima)):] = arima
+
+    colunasShift = ['adj close','ets', 'arima']
+    for item in colunasShift:
+        tudo[item] = tudo[item].shift(-120, fill_value=np.nan)
+
+    tudo.drop(tudo.tail(120).index, inplace=True)
+
+    training_data = tudo.drop(tudo.tail(120).index, inplace=False)
+    validation_data = tudo.tail(120)
+
     train_target = training_data[['adj close']]
-    train_features = training_data.drop(['adj close', 'Date', 'ticker'], axis=1, inplace=False)
-    test_features = validation_data.drop(['adj close', 'Date', 'ticker'], axis=1, inplace=False)
+    train_features = training_data.drop(['adj close', 'ticker'], axis=1, inplace=False)
+    test_features = validation_data.drop(['adj close', 'ticker'], axis=1, inplace=False)
+
+    gst.grid_xgboost(training_data, validation_data, 120)
+
     xgbr.fit(X=train_features, y=train_target, verbose=True)
     forecast_xgboost = xgbr.predict(test_features)
-    return pd.Series(data=forecast_xgboost, index=validation_data['Date'])
+    return pd.Series(data=forecast_xgboost, index=validation_data.index)
 
 def debug(validation_data: pd.Series,
           forecast_ets: pd.Series,
@@ -57,46 +76,92 @@ def debug(validation_data: pd.Series,
           forecast_xgboost: pd.DataFrame,
           forecast_snaive: pd.Series,
           forecast_drift: pd.Series,
-          forecast_average: pd.Series):
+          forecast_average: pd.Series,
+          verbose: bool):
 
     print("\tPrediction model\t\t|\tRMSE\t\t\t\t|\tMAE\t\t\t\t\t|\tSeasonal MASE\t\t|\tSMAPE")
     print("\t-------------------------------------------------------------------------------------------------")
 
-    print("\tXGBoost Regression", end="\t\t|\t")
-    print(rmse([float(x) for x in validation_data.values], forecast_xgboost), end="\t|\t")
-    print(meanabs([float(x) for x in validation_data.values], forecast_xgboost), end="\t|\t")
-    print(eval.mase(validation_data.values, forecast_xgboost, 5), end="\t|\t")
-    print(eval.smape(validation_data.values, forecast_xgboost))
+    sn = [
+        rmse([float(x) for x in validation_data.values], forecast_snaive),
+        meanabs([float(x) for x in validation_data.values], forecast_snaive),
+        eval.mase(validation_data.values, forecast_snaive, 5),
+        eval.smape(validation_data.values, forecast_snaive)
+    ]
+    if verbose:
+        print("\tSeasonal Naive", end="\t\t\t|\t")
+        print(rmse_sn, end="\t|\t")
+        print(mae_sn, end="\t|\t")
+        print(mase_sn, end="\t|\t")
+        print(smape_sn)
 
-    print("\tExponentialSmoothing", end="\t|\t")
-    print(rmse([float(x) for x in validation_data.values], forecast_ets), end="\t|\t")
-    print(meanabs([float(x) for x in validation_data.values], forecast_ets), end="\t|\t")
-    print(eval.mase(validation_data.values, forecast_ets, 5), end="\t|\t")
-    print(eval.smape(validation_data.values, forecast_ets))
+    df = [
+        rmse([float(x) for x in validation_data.values], forecast_drift),
+        meanabs([float(x) for x in validation_data.values], forecast_drift),
+        eval.mase(validation_data.values, forecast_drift, 5),
+        eval.smape(validation_data.values, forecast_drift)
+    ]
+    if verbose:
+        print("\tDrift", end="\t\t\t\t\t|\t")
+        print(rmse_df, end="\t|\t")
+        print(mae_df, end="\t|\t")
+        print(mase_df, end="\t|\t")
+        print(smape_df)
 
-    print("\tARIMA", end="\t\t\t\t\t|\t")
-    print(rmse([float(x) for x in validation_data.values], forecast_arima), end="\t|\t")
-    print(meanabs([float(x) for x in validation_data.values], forecast_arima), end="\t|\t")
-    print(eval.mase(validation_data.values, forecast_arima, 5), end="\t|\t")
-    print(eval.smape(validation_data.values, forecast_arima))
+    av = [
+        rmse([float(x) for x in validation_data.values], forecast_average),
+        meanabs([float(x) for x in validation_data.values], forecast_average),
+        eval.mase(validation_data.values, forecast_average, 5),
+        eval.smape(validation_data.values, forecast_average)
+    ]
+    if verbose:
+        print("\tAverage", end="\t\t\t\t\t|\t")
+        print(av[0], end="\t|\t")
+        print(av[1], end="\t|\t")
+        print(av[2], end="\t|\t")
+        print(av[3])
 
-    print("\tSeasonal Naive", end="\t\t\t|\t")
-    print(rmse([float(x) for x in validation_data.values], forecast_snaive), end="\t|\t")
-    print(meanabs([float(x) for x in validation_data.values], forecast_snaive), end="\t|\t")
-    print(eval.mase(validation_data.values, forecast_snaive, 5), end="\t|\t")
-    print(eval.smape(validation_data.values, forecast_snaive))
+    xgb = [
+        rmse([float(x) for x in validation_data.values], forecast_xgboost),
+        meanabs([float(x) for x in validation_data.values], forecast_xgboost),
+        eval.mase(validation_data.values, forecast_xgboost, 5),
+        eval.smape(validation_data.values, forecast_xgboost)
+    ]
+    if verbose:
+        print("\tXGBoost Regression", end="\t\t|\t")
+        print(xgb[0], end="\t|\t")
+        print(xgb[1], end="\t|\t")
+        print(xgb[2], end="\t|\t")
+        print(xgb[3])
 
-    print("\tDrift", end="\t\t\t\t\t|\t")
-    print(rmse([float(x) for x in validation_data.values], forecast_drift), end="\t|\t")
-    print(meanabs([float(x) for x in validation_data.values], forecast_drift), end="\t|\t")
-    print(eval.mase(validation_data.values, forecast_drift, 5), end="\t|\t")
-    print(eval.smape(validation_data.values, forecast_drift))
+    ets = [
+        rmse([float(x) for x in validation_data.values], forecast_ets),
+        meanabs([float(x) for x in validation_data.values], forecast_ets),
+        eval.mase(validation_data.values, forecast_ets, 5),
+        eval.smape(validation_data.values, forecast_ets)
+    ]
+    if verbose:
+        print("\tExponentialSmoothing", end="\t|\t")
+        print(ets[0], end="\t|\t")
+        print(ets[1], end="\t|\t")
+        print(ets[2], end="\t|\t")
+        print(ets[3])
 
-    print("\tAverage", end="\t\t\t\t\t|\t")
-    print(rmse([float(x) for x in validation_data.values], forecast_average), end="\t|\t")
-    print(meanabs([float(x) for x in validation_data.values], forecast_average), end="\t|\t")
-    print(eval.mase(validation_data.values, forecast_average, 5), end="\t|\t")
-    print(eval.smape(validation_data.values, forecast_average))
+    ar = [
+        rmse([float(x) for x in validation_data.values], forecast_arima),
+        meanabs([float(x) for x in validation_data.values], forecast_arima),
+        eval.mase(validation_data.values, forecast_arima, 5),
+        eval.smape(validation_data.values, forecast_arima)
+    ]
+    if verbose:
+        print("\tARIMA", end="\t\t\t\t\t|\t")
+        print(ar[0], end="\t|\t")
+        print(ar[1], end="\t|\t")
+        print(ar[2], end="\t|\t")
+        print(ar[3])
+
+    result = DataFrame ([sn, df, av, xgb, ets, ar], index = ['seasonal_naive','drift','average','xgboost','ets','arima'],columns = ['RMSE','MAE','MASE', 'sMAPE'])
+    return result
 
 def run(training_data: pd.DataFrame, validation_data: pd.DataFrame):
 
@@ -109,14 +174,19 @@ def run(training_data: pd.DataFrame, validation_data: pd.DataFrame):
                     index = validation_data.index
     )
 
-    # debug(
-    #     validation_data= test_data_serie,
-    #     forecast_ets= ets(training_data_serie, 120),
-    #     forecast_arima= arima(training_data_serie, 120),
-    #     forecast_xgboost= xgboost(training_data, validation_data, 120),
-    #     forecast_snaive= seasonal_naive(training_data_serie, 5, 120),
-    #     forecast_drift= drift(training_data_serie, 120),
-    #     forecast_average= average(training_data_serie, 120)
-    # )
+    print(pd.__version__)
+
+    aux = debug(
+        validation_data= test_data_serie,
+        forecast_ets= ets(training_data_serie, 120),
+        forecast_arima= arima(training_data_serie, 120),
+        forecast_xgboost= xgboost(training_data, validation_data, ets=ets(training_data_serie, 120), arima=arima(training_data_serie, 120)),
+        forecast_snaive= seasonal_naive(training_data_serie, 5, 120),
+        forecast_drift= drift(training_data_serie, 120),
+        forecast_average= average(training_data_serie, 120),
+        verbose=False
+    )
+
+    print(aux)
 
     gst.grid_xgboost(training_data, validation_data, 120)

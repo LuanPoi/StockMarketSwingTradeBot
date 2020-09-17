@@ -182,7 +182,7 @@ def stock_stats(data_frame: pd.DataFrame):
 def run():
     mySQLManager = MSQLM.MySQLManager("localhost", "root", "toor")
     mySQLManager.connect('stock_market')
-    data = mySQLManager.read('select * from stock where ticker=\'' + tickers['Inter'] + '\'')
+    data = mySQLManager.read('select * from stock where ticker=\'' + tickers['Itau'] + '\'')
 
     training_data = data.drop(data.tail(120).index, inplace=False)
     validation_data = data.tail(120)
