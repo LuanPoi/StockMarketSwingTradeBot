@@ -66,9 +66,9 @@ def xgboost(training_data, validation_data, ets, arima):
 
     gst.grid_xgboost(training_data, validation_data, 120)
 
-    xgbr.fit(X=train_features, y=train_target, verbose=True)
-    forecast_xgboost = xgbr.predict(test_features)
-    return pd.Series(data=forecast_xgboost, index=validation_data.index)
+    # xgbr.fit(X=train_features, y=train_target, verbose=True)
+    # forecast_xgboost = xgbr.predict(test_features)
+    # return pd.Series(data=forecast_xgboost, index=validation_data.index)
 
 def debug(validation_data: pd.Series,
           forecast_ets: pd.Series,
