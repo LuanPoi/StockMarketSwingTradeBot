@@ -3,7 +3,7 @@ import pandas as pd
 
 EPSILON = 1e-10
 
-# TODO: sMASE (seasonal Mean Absolute Scaled Erro
+# sMASE (seasonal Mean Absolute Scaled Erro
 def mase(test_data: pd.Series, forecast_data: pd.Series, season_range: int = 1):
     """
     Mean Absolute Scaled Error

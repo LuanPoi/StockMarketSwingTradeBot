@@ -7,9 +7,6 @@ import pandas as pd
 import numpy as np
 from stockstats import StockDataFrame
 
-# TODO: Prioridade #1 - Entender como funciona e implementar XGBoost até quinta, se possivel aplicar o greedsearchCV também.
-
-
 tickers = {
         "Inter": "BIDI4.SA",
         "Petrobras": "PETR4.SA",
@@ -17,23 +14,31 @@ tickers = {
         "Itau": "ITUB4.SA",
         "Ambev": "ABEV3.SA",
         "Sinqia": "SQIA3.SA",
-        "iShares_Bovespa": "BOVA11.SA"
+        "Bovespa": "BOVA11.SA"
 }
 
-def load_data(ticker):
-    mySQLManager = MySQLManager("localhost", "root", "toor")
+def run():
+    dataset_base_path = "../../Resources/Datasets/"
+    # Popula o csv com os dados de todas as ações de uma vez
+    # populate_csv(tickers, dataset_base_path)
 
-    mySQLManager.connect("stock_market")
-    return mySQLManager.read(table_name="stock", select_items=["ticker", "date", "adj_close"], ticker=ticker, where_condition="date < \'2019-07-12\'",
-                                verbose=False)
+    # # Carrega os dados de uma determinada ação do banco de dados
+    # mySQLManager = MSQLM.MySQLManager("localhost", "root", "toor")
+    # mySQLManager.connect('stock_market')
+    # data = mySQLManager.read('select * from stock where ticker=\'' + tickers['Itau'] + '\'')
 
-def load_true_values(ticker):
-    mySQLManager = None
-    mySQLManager = MySQLManager("localhost", "root", "toor")
-    mySQLManager.connect("stock_market")
-    true_values = mySQLManager.read(table_name="stock", select_items=["ticker", "date", "adj_close"], ticker=ticker,
-                                    where_condition="date >= \'2019-07-12\' limit 120", verbose=False)
-    return true_values
+    # Carrega os dados de todas as ações de um arquivo CSV e joga fora aquelas com ticker diferente do escolhido
+    data = pd.read_csv(dataset_base_path+'stock.csv')
+    data.drop(data[data['ticker'] != tickers['Petrobras']].index, inplace=True)
+
+    #Separa os dados entre treinamento e validação (dentro da data limite usada no documento)
+    training_data = data.drop(data.tail(120).index, inplace=False)
+    validation_data = data.tail(120)
+
+    training_data.set_index('Date', inplace=True)
+    validation_data.set_index('Date', inplace=True)
+
+    Trainer.run(training_data, validation_data)
 
 def populate_mysql(tickers: dict):
 
@@ -41,12 +46,12 @@ def populate_mysql(tickers: dict):
 
     for ticker in tickers.values():
         raw_data = YAPIH.historical(str(ticker))
-
         if toggle:
             ticker_serie = pd.Series([str(ticker) for x in range(len(raw_data))], raw_data.index, name="ticker")
             processed_data = pd.concat([ticker_serie, raw_data, stock_stats(raw_data)], axis=1, sort=False)
 
             processed_data.replace([np.inf, -np.inf], np.nan, inplace=True)
+            processed_data['adj close'] = processed_data['adj close'].replace(np.nan, value=processed_data['adj close'].mean(), inplace=False)
 
             training_data = processed_data.drop(processed_data[processed_data.index > datetime(2020,7,31)].index, inplace=False)
             test_data = processed_data.drop(processed_data[processed_data.index <= datetime(2020,7,31)].index, inplace=False)
@@ -62,6 +67,7 @@ def populate_mysql(tickers: dict):
             processed_data = pd.concat([ticker_serie, raw_data, stock_stats(raw_data)], axis=1, sort=False)
 
             processed_data.replace([np.inf, -np.inf], np.nan)
+            processed_data['adj close'] = processed_data['adj close'].replace(np.nan, value=processed_data['adj close'].mean(), inplace=False)
 
             training_data = processed_data.drop(processed_data[processed_data.index > datetime(2020, 7, 31)].index, inplace=False)
             test_data = processed_data.drop(processed_data[processed_data.index <= datetime(2020, 7, 31)].index, inplace=False)
@@ -73,6 +79,7 @@ def populate_mysql(tickers: dict):
             mySQLManager.create('stock_test', test_data, 'append')
 
 def stock_stats(data_frame: pd.DataFrame):
+    # TODO: Melhorar as features obtidas adicionando algumas mais úteis.
     stock = StockDataFrame.retype(data_frame)
 
     data = {
@@ -179,18 +186,47 @@ def stock_stats(data_frame: pd.DataFrame):
 
     return stats
 
-def run():
-    mySQLManager = MSQLM.MySQLManager("localhost", "root", "toor")
-    mySQLManager.connect('stock_market')
-    data = mySQLManager.read('select * from stock where ticker=\'' + tickers['Itau'] + '\'')
+def populate_csv(tickers: dict, base_path: str):
+    toggle = True
 
-    training_data = data.drop(data.tail(120).index, inplace=False)
-    validation_data = data.tail(120)
+    for ticker in tickers.values():
+        raw_data = YAPIH.historical(str(ticker))
 
-    training_data.set_index('Date', inplace=True)
-    validation_data.set_index('Date', inplace=True)
+        #T oggle para separar a primeira entrada (responsavel por criar o arquivo) das outras.
+        if toggle:
+            # Cria um dataframe novo juntando uma coluna de tickers + dados originais + features do stockstats
+            ticker_serie = pd.Series([str(ticker) for x in range(len(raw_data))], raw_data.index, name="ticker")
+            processed_data = pd.concat([ticker_serie, raw_data, stock_stats(raw_data)], axis=1, sort=False)
 
-    Trainer.run(training_data, validation_data)
+            # Mini tratamento de dados - Data Cleansing e Preenchimento de campos vazios (aplicado somente ao 'adj close') com a média da coluna
+            processed_data.replace([np.inf, -np.inf], np.nan, inplace=True)
+            processed_data['adj close'] = processed_data['adj close'].replace(np.nan, value=processed_data['adj close'].mean(), inplace=False)
+
+            # Separação em dados de treino (até a dada marcada no documento de validação) e teste (mas que eu nunca uso como teste não sei pq)
+            training_data = processed_data.drop(processed_data[processed_data.index > datetime(2020,7,31)].index, inplace=False)
+            test_data = processed_data.drop(processed_data[processed_data.index <= datetime(2020,7,31)].index, inplace=False)
+
+            # Salva os dataframes em CSV (Sobrescreve se o arquivo ja existir)
+            training_data.to_csv(base_path+'stock.csv', mode='w', encoding='utf-8', index=True)
+            test_data.to_csv(base_path + 'stock_test.csv', mode='w', encoding='utf-8', index=True, header=True)
+
+            toggle = False
+        else:
+            # Cria um dataframe novo juntando uma coluna de tickers + dados originais + features do stockstats
+            ticker_serie = pd.Series([str(ticker) for x in range(len(raw_data))], raw_data.index, name="ticker")
+            processed_data = pd.concat([ticker_serie, raw_data, stock_stats(raw_data)], axis=1, sort=False)
+
+            # Mini tratamento de dados - Data Cleansing e Preenchimento de campos vazios (aplicado somente ao 'adj close') com a média da coluna
+            processed_data.replace([np.inf, -np.inf], np.nan)
+            processed_data['adj close'] = processed_data['adj close'].replace(np.nan, value=processed_data['adj close'].mean(), inplace=False)
+
+            # Separação em dados de treino (até a dada marcada no documento de validação) e teste (mas que eu nunca uso como teste não sei pq)
+            training_data = processed_data.drop(processed_data[processed_data.index > datetime(2020, 7, 31)].index, inplace=False)
+            test_data = processed_data.drop(processed_data[processed_data.index <= datetime(2020, 7, 31)].index, inplace=False)
+
+            # Salva os dataframes em CSV (Adiciona ao fim do arquivo)
+            training_data.to_csv(base_path + 'stock', mode='a', encoding='utf-8', index=True)
+            test_data.to_csv(base_path + 'stock_test', mode='a', encoding='utf-8', index=True, header=True)
 
 if __name__ == "__main__":
     run()

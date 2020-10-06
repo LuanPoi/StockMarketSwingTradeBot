@@ -1,46 +1,51 @@
+from Scripts.DataManager.BaseLines import average, seasonal_naive, drift
+from statsmodels.tsa.api import ExponentialSmoothing
+from statsmodels.tsa.api import ARIMA
+from statsmodels.tools.eval_measures import rmse, meanabs
 from pandas import DataFrame
 import xgboost as xgb
-
-from Scripts.DataManager.MySQLManager import MySQLManager
-from Scripts.DataManager.YahooAPIHandler import *
-from Scripts.DataManager.BaseLines import average, seasonal_naive, drift
-
-import pandas as pd
-from stockstats import StockDataFrame
-
-from datetime import datetime
-import math
-import matplotlib.pyplot as plt
-from statsmodels.tsa.api import ExponentialSmoothing, SimpleExpSmoothing, Holt
-from statsmodels.tsa.api import ARIMA
-from statsmodels.iolib.table import SimpleTable
-from statsmodels.tools.eval_measures import rmse, meanabs
-import mysql.connector
 import numpy as np
 import pandas as pd
-import pandas_datareader as pdr
-import yfinance as yf
-from stockstats import StockDataFrame
 import Scripts.Tools.eval as eval
-from sklearn.model_selection import GridSearchCV
+import plotly.offline as py
+import plotly.graph_objs as go
 
-import Scripts.DataManager.GSCV_tests as gst
+import pickle
+
+def run(training_data: pd.DataFrame, validation_data: pd.DataFrame):
+    training_data_serie = pd.Series(
+                    data = training_data['adj close'],
+                    index = training_data.index
+    )
+    test_data_serie = pd.Series(
+                    data = validation_data['adj close'],
+                    index = validation_data.index
+    )
+
+    forecast_ets = ets(training_data_serie, 120)
+    forecast_arima = arima(training_data_serie, 120)
+    forecast_xgboost = xgboost(training_data, test_data_serie, ets=forecast_ets, arima=forecast_arima)
+    forecast_snaive = seasonal_naive(training_data_serie, 5, 120)
+    forecast_drift = drift(training_data_serie, 120)
+    forecast_average = average(training_data_serie, 120)
+
+    plot_graph(forecast_ets, forecast_arima, forecast_xgboost, forecast_snaive, forecast_drift, forecast_average, test_data_serie)
+
+    debug(test_data_serie, forecast_ets, forecast_arima, forecast_xgboost, forecast_snaive, forecast_drift, forecast_average, verbose=True)
 
 def ets(time_serie, Npt):
     #TODO: Fazer retornar os dados na forma de um pandas.Series
-    ets_fit = ExponentialSmoothing(time_serie.values, seasonal_periods=5, trend='mul', seasonal='add', damped=False).fit()
+    ets_fit = ExponentialSmoothing(endog=time_serie.values, seasonal_periods=5, trend='mul', seasonal='add', damped=True).fit()
     forecast_ets = [x for x in ets_fit.forecast(Npt)]
-    return forecast_ets
+    return pd.Series(forecast_ets)
 
 def arima(time_serie, Npt):
     # TODO: Fazer retornar os dados na forma de um pandas.Series
     arima_fit = ARIMA(time_serie.values, (0, 0, 1)).fit(disp=False)
     forecast_arima = [x for x in arima_fit.forecast(Npt)[0]] # [0]= predições
-    return forecast_arima
+    return pd.Series(forecast_arima)
 
-#XGB_Regressor
 def xgboost(training_data, validation_data, ets, arima):
-    # Warning: o XGBoost precisa receber as features do conjunto de validação mas você só consegue estes dados já tendo os dados da previsão.
 
     xgbr = xgb.XGBRegressor(objective ='reg:linear', verbosity=0)
     print(xgbr)
@@ -64,20 +69,15 @@ def xgboost(training_data, validation_data, ets, arima):
     train_features = training_data.drop(['adj close', 'ticker'], axis=1, inplace=False)
     test_features = validation_data.drop(['adj close', 'ticker'], axis=1, inplace=False)
 
-    gst.grid_xgboost(training_data, validation_data, 120)
+    #return gst.grid_xgboost(training_data, validation_data, 120, str(training_data['ticker'][0]))
 
-    # xgbr.fit(X=train_features, y=train_target, verbose=True)
-    # forecast_xgboost = xgbr.predict(test_features)
-    # return pd.Series(data=forecast_xgboost, index=validation_data.index)
+    filename = '../../Resources/TunnedModels/'+ training_data['ticker'][0][:-3] +'_xgboost_31_07_covid.tmsave'
+    xgbr = pickle.load(open(filename, 'rb'))
 
-def debug(validation_data: pd.Series,
-          forecast_ets: pd.Series,
-          forecast_arima: pd.Series,
-          forecast_xgboost: pd.DataFrame,
-          forecast_snaive: pd.Series,
-          forecast_drift: pd.Series,
-          forecast_average: pd.Series,
-          verbose: bool):
+    forecast_xgboost = xgbr.predict(test_features)
+    return pd.Series(data=forecast_xgboost, index=validation_data.index)
+
+def debug(validation_data: pd.Series, forecast_ets: pd.Series, forecast_arima: pd.Series, forecast_xgboost: pd.DataFrame, forecast_snaive: pd.Series, forecast_drift: pd.Series, forecast_average: pd.Series, verbose: bool):
 
     print("\tPrediction model\t\t|\tRMSE\t\t\t\t|\tMAE\t\t\t\t\t|\tSeasonal MASE\t\t|\tSMAPE")
     print("\t-------------------------------------------------------------------------------------------------")
@@ -90,10 +90,10 @@ def debug(validation_data: pd.Series,
     ]
     if verbose:
         print("\tSeasonal Naive", end="\t\t\t|\t")
-        print(rmse_sn, end="\t|\t")
-        print(mae_sn, end="\t|\t")
-        print(mase_sn, end="\t|\t")
-        print(smape_sn)
+        print(sn[0], end="\t|\t")
+        print(sn[1], end="\t|\t")
+        print(sn[2], end="\t|\t")
+        print(sn[3])
 
     df = [
         rmse([float(x) for x in validation_data.values], forecast_drift),
@@ -103,11 +103,10 @@ def debug(validation_data: pd.Series,
     ]
     if verbose:
         print("\tDrift", end="\t\t\t\t\t|\t")
-        print(rmse_df, end="\t|\t")
-        print(mae_df, end="\t|\t")
-        print(mase_df, end="\t|\t")
-        print(smape_df)
-
+        print(df[0], end="\t|\t")
+        print(df[1], end="\t|\t")
+        print(df[2], end="\t|\t")
+        print(df[3])
     av = [
         rmse([float(x) for x in validation_data.values], forecast_average),
         meanabs([float(x) for x in validation_data.values], forecast_average),
@@ -163,30 +162,11 @@ def debug(validation_data: pd.Series,
     result = DataFrame ([sn, df, av, xgb, ets, ar], index = ['seasonal_naive','drift','average','xgboost','ets','arima'],columns = ['RMSE','MAE','MASE', 'sMAPE'])
     return result
 
-def run(training_data: pd.DataFrame, validation_data: pd.DataFrame):
-
-    training_data_serie = pd.Series(
-                    data = training_data['adj close'],
-                    index = training_data.index
-    )
-    test_data_serie = pd.Series(
-                    data = validation_data['adj close'],
-                    index = validation_data.index
-    )
-
-    print(pd.__version__)
-
-    aux = debug(
-        validation_data= test_data_serie,
-        forecast_ets= ets(training_data_serie, 120),
-        forecast_arima= arima(training_data_serie, 120),
-        forecast_xgboost= xgboost(training_data, validation_data, ets=ets(training_data_serie, 120), arima=arima(training_data_serie, 120)),
-        forecast_snaive= seasonal_naive(training_data_serie, 5, 120),
-        forecast_drift= drift(training_data_serie, 120),
-        forecast_average= average(training_data_serie, 120),
-        verbose=False
-    )
-
-    print(aux)
-
-    gst.grid_xgboost(training_data, validation_data, 120)
+def plot_graph(forecast_ets, forecast_arima, forecast_xgboost, forecast_snaive, forecast_drift, forecast_average, test_data_serie):
+    # Gráfico usando apenas marcadores
+    trace1 = go.Scatter(x=['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio'],
+                        y=[10, 9, 11, 8, 12],
+                        mode='lines',
+                        name='Gráfico com linhas tracejadas',
+                        line={'color': '#ee5253',
+                              'dash': 'dash'})

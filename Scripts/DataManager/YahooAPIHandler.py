@@ -9,7 +9,7 @@ import yfinance as yf
 
 def historical(ticker, start_date = None, end_date = None):
     if ticker is not None:
-        yf.pdr_override()  # <== that's all it takes :-)
+        yf.pdr_override()
         if start_date is not None and end_date is not None:
             data = pdr.data.get_data_yahoo(ticker=ticker, start=start_date, end=end_date)
             return data
