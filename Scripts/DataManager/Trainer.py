@@ -1,4 +1,5 @@
 from Scripts.DataManager.BaseLines import average, seasonal_naive, drift
+import Scripts.DataManager.GSCV_tests as gst
 from statsmodels.tsa.api import ExponentialSmoothing
 from statsmodels.tsa.api import ARIMA
 from statsmodels.tools.eval_measures import rmse, meanabs
@@ -35,13 +36,13 @@ def run(training_data: pd.DataFrame, validation_data: pd.DataFrame):
 
 def ets(time_serie, Npt):
     #TODO: Fazer retornar os dados na forma de um pandas.Series
-    ets_fit = ExponentialSmoothing(endog=time_serie.values, seasonal_periods=5, trend='mul', seasonal='add', damped=True).fit()
+    ets_fit = ExponentialSmoothing(endog=time_serie.values.astype('float'), seasonal_periods=5, trend='mul', seasonal='add', damped=True).fit()
     forecast_ets = [x for x in ets_fit.forecast(Npt)]
     return pd.Series(forecast_ets)
 
 def arima(time_serie, Npt):
     # TODO: Fazer retornar os dados na forma de um pandas.Series
-    arima_fit = ARIMA(time_serie.values, (0, 0, 1)).fit(disp=False)
+    arima_fit = ARIMA(time_serie.values.astype('float'), (0, 0, 1)).fit(disp=False)
     forecast_arima = [x for x in arima_fit.forecast(Npt)[0]] # [0]= predições
     return pd.Series(forecast_arima)
 
@@ -69,12 +70,12 @@ def xgboost(training_data, validation_data, ets, arima):
     train_features = training_data.drop(['adj close', 'ticker'], axis=1, inplace=False)
     test_features = validation_data.drop(['adj close', 'ticker'], axis=1, inplace=False)
 
-    #return gst.grid_xgboost(training_data, validation_data, 120, str(training_data['ticker'][0]))
+    return gst.grid_xgboost(training_data, validation_data, 120, str(training_data['ticker'][0]))
 
     filename = '../../Resources/TunnedModels/'+ training_data['ticker'][0][:-3] +'_xgboost_31_07_covid.tmsave'
     xgbr = pickle.load(open(filename, 'rb'))
 
-    forecast_xgboost = xgbr.predict(test_features)
+    forecast_xgboost = xgbr.predict(test_features.astype('float'))
     return pd.Series(data=forecast_xgboost, index=validation_data.index)
 
 def debug(validation_data: pd.Series, forecast_ets: pd.Series, forecast_arima: pd.Series, forecast_xgboost: pd.DataFrame, forecast_snaive: pd.Series, forecast_drift: pd.Series, forecast_average: pd.Series, verbose: bool):

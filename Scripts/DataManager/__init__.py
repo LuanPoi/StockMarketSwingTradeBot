@@ -29,6 +29,7 @@ def run():
 
     # Carrega os dados de todas as ações de um arquivo CSV e joga fora aquelas com ticker diferente do escolhido
     data = pd.read_csv(dataset_base_path+'stock.csv')
+    print(data['adj close'].isna().sum())
     data.drop(data[data['ticker'] != tickers['Petrobras']].index, inplace=True)
 
     #Separa os dados entre treinamento e validação (dentro da data limite usada no documento)

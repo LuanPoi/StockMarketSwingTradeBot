@@ -42,7 +42,7 @@ def grid_xgboost(training_data, validation_data, Npt, simple_ticker):
     test_features = validation_data.drop(['adj close', 'ticker'], axis=1, inplace=False)
 
     grid = GridSearchCV(xgbr, param_grid=hyper, scoring=metricas, verbose=1, refit='neg_root_mean_squared_error', return_train_score=False, n_jobs=-1)
-    grid.fit(X=train_features, y=train_target)
+    grid.fit(X=train_features.astype('float'), y=train_target.astype('float'))
 
     # save the model to disk
     filename = '../../Resources/TunnedModels/'+simple_ticker[:-3]+'_xgboost_31_07_covid.tmsave'
