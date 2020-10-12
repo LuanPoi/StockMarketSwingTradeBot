@@ -46,15 +46,9 @@ def grid_xgboost(training_data, validation_data, Npt, simple_ticker):
 
     # save the model to disk
     filename = '../../Resources/TunnedModels/'+simple_ticker[:-3]+'_xgboost_31_07_covid.tmsave'
-    pickle.dump(grid.best_estimator_, open(filename, 'wb'))
+    pickle.dump(grid, open(filename, 'wb'))
 
     print("----------------best estimator-------------------")
     print(pd.DataFrame(grid.cv_results_))
     print("----------------best estimator-------------------")
-
-    xgbr = pickle.load(open(filename, 'rb'))
-
-    forecast_xgboost = xgbr.predict(test_features)
-    print(forecast_xgboost)
-    print("\n\n\n------------------- Fim -------------------\n\n\n")
-    return pd.Series(forecast_xgboost)
+    return

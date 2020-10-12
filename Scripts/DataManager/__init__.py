@@ -6,6 +6,11 @@ from datetime import datetime
 import pandas as pd
 import numpy as np
 from stockstats import StockDataFrame
+import csv
+import sys
+import math
+
+sys.setrecursionlimit(50000)
 
 tickers = {
         "Inter": "BIDI4.SA",
@@ -19,16 +24,19 @@ tickers = {
 
 def run():
     dataset_base_path = "../../Resources/Datasets/"
-    # Popula o csv com os dados de todas as ações de uma vez
-    # populate_csv(tickers, dataset_base_path)
-
-    # # Carrega os dados de uma determinada ação do banco de dados
+    # Popula o banco de dados
+    # populate_mysql(tickers)
+    # Carrega os dados de uma determinada ação do banco de dados
     # mySQLManager = MSQLM.MySQLManager("localhost", "root", "toor")
     # mySQLManager.connect('stock_market')
     # data = mySQLManager.read('select * from stock where ticker=\'' + tickers['Itau'] + '\'')
 
+    # Popula o csv com os dados de todas as ações de uma vez
+    populate_csv(tickers, dataset_base_path)
     # Carrega os dados de todas as ações de um arquivo CSV e joga fora aquelas com ticker diferente do escolhido
-    data = pd.read_csv(dataset_base_path+'stock.csv')
+    ticker_metadata = pd.read_csv(dataset_base_path + 'stock_metadata' + '.csv', sep=';', quotechar='"', names=['dtypes'], index_col=0).to_dict()['dtypes']
+    data = pd.read_csv(dataset_base_path+'stock.csv', sep=';', header=0, index_col=0, quoting=csv.QUOTE_NONNUMERIC, dtype=ticker_metadata)
+    data.index = pd.to_datetime(data.index)
     print(data['adj close'].isna().sum())
     data.drop(data[data['ticker'] != tickers['Petrobras']].index, inplace=True)
 
@@ -40,6 +48,8 @@ def run():
     validation_data.set_index('Date', inplace=True)
 
     Trainer.run(training_data, validation_data)
+
+
 
 def populate_mysql(tickers: dict):
 
@@ -78,6 +88,8 @@ def populate_mysql(tickers: dict):
             mySQLManager.create('stock', training_data, 'append')
             mySQLManager.connect('stock_market')
             mySQLManager.create('stock_test', test_data, 'append')
+
+
 
 def stock_stats(data_frame: pd.DataFrame):
     # TODO: Melhorar as features obtidas adicionando algumas mais úteis.
@@ -187,13 +199,15 @@ def stock_stats(data_frame: pd.DataFrame):
 
     return stats
 
+
+
 def populate_csv(tickers: dict, base_path: str):
     toggle = True
 
     for ticker in tickers.values():
         raw_data = YAPIH.historical(str(ticker))
 
-        #T oggle para separar a primeira entrada (responsavel por criar o arquivo) das outras.
+        # Toggle para separar a primeira entrada (responsavel por criar o arquivo) das outras.
         if toggle:
             # Cria um dataframe novo juntando uma coluna de tickers + dados originais + features do stockstats
             ticker_serie = pd.Series([str(ticker) for x in range(len(raw_data))], raw_data.index, name="ticker")
@@ -203,13 +217,17 @@ def populate_csv(tickers: dict, base_path: str):
             processed_data.replace([np.inf, -np.inf], np.nan, inplace=True)
             processed_data['adj close'] = processed_data['adj close'].replace(np.nan, value=processed_data['adj close'].mean(), inplace=False)
 
+            # Converte campo valume para int64 (para resolver um bug com o .csv)
+            processed_data['volume'] = processed_data['volume'].apply(to_int)
+
             # Separação em dados de treino (até a dada marcada no documento de validação) e teste (mas que eu nunca uso como teste não sei pq)
             training_data = processed_data.drop(processed_data[processed_data.index > datetime(2020,7,31)].index, inplace=False)
             test_data = processed_data.drop(processed_data[processed_data.index <= datetime(2020,7,31)].index, inplace=False)
 
             # Salva os dataframes em CSV (Sobrescreve se o arquivo ja existir)
-            training_data.to_csv(base_path+'stock.csv', mode='w', encoding='utf-8', index=True)
-            test_data.to_csv(base_path + 'stock_test.csv', mode='w', encoding='utf-8', index=True, header=True)
+            training_data.to_csv(base_path+'stock.csv', mode='a', sep=';', na_rep='', header=True, index=True, date_format='%Y-%m-%d', decimal='.', quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8')
+            test_data.to_csv(base_path + 'stock_test.csv', mode='a', sep=';', na_rep='', header=True, index=True, date_format='%Y-%m-%d', decimal='.', quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8')
+            training_data.dtypes.to_csv(base_path + 'stock_metadata' + '.csv', mode='w', sep=';', header=False, index=True, quotechar='"', encoding='utf-8')
 
             toggle = False
         else:
@@ -221,13 +239,20 @@ def populate_csv(tickers: dict, base_path: str):
             processed_data.replace([np.inf, -np.inf], np.nan)
             processed_data['adj close'] = processed_data['adj close'].replace(np.nan, value=processed_data['adj close'].mean(), inplace=False)
 
+            # Converte campo valume para int64 (para resolver um bug com o .csv)
+            processed_data['volume'] = processed_data['volume'].apply(to_int)
+
             # Separação em dados de treino (até a dada marcada no documento de validação) e teste (mas que eu nunca uso como teste não sei pq)
             training_data = processed_data.drop(processed_data[processed_data.index > datetime(2020, 7, 31)].index, inplace=False)
             test_data = processed_data.drop(processed_data[processed_data.index <= datetime(2020, 7, 31)].index, inplace=False)
 
             # Salva os dataframes em CSV (Adiciona ao fim do arquivo)
-            training_data.to_csv(base_path + 'stock', mode='a', encoding='utf-8', index=True)
-            test_data.to_csv(base_path + 'stock_test', mode='a', encoding='utf-8', index=True, header=True)
+            training_data.to_csv(base_path + 'stock.csv', mode='a', sep=';', na_rep='', header=False, index=True, date_format='%Y-%m-%d', decimal='.', quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8')
+            test_data.to_csv(base_path + 'stock_test.csv', mode='a', sep=';', na_rep='', header=False, index=True, date_format='%Y-%m-%d', decimal='.', quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8')
+
+def to_int(x):
+    if not math.isnan(x):
+        return int(x)
 
 if __name__ == "__main__":
     run()

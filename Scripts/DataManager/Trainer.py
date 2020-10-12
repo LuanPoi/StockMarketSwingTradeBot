@@ -14,25 +14,19 @@ import plotly.graph_objs as go
 import pickle
 
 def run(training_data: pd.DataFrame, validation_data: pd.DataFrame):
-    training_data_serie = pd.Series(
-                    data = training_data['adj close'],
-                    index = training_data.index
-    )
-    test_data_serie = pd.Series(
-                    data = validation_data['adj close'],
-                    index = validation_data.index
-    )
 
-    forecast_ets = ets(training_data_serie, 120)
-    forecast_arima = arima(training_data_serie, 120)
-    forecast_xgboost = xgboost(training_data, test_data_serie, ets=forecast_ets, arima=forecast_arima)
-    forecast_snaive = seasonal_naive(training_data_serie, 5, 120)
-    forecast_drift = drift(training_data_serie, 120)
-    forecast_average = average(training_data_serie, 120)
+    forecast_ets = ets(training_data['adj close'], 120)
+    forecast_ets.index = validation_data.index
+    forecast_arima = arima(training_data['adj close'], 120)
+    forecast_arima.index = validation_data.index
+    forecast_xgboost = xgboost(training_data, validation_data, ets=forecast_ets, arima=forecast_arima)
+    forecast_snaive = seasonal_naive(training_data['adj close'], 5, 120)
+    forecast_drift = drift(training_data['adj close'], 120)
+    forecast_average = average(training_data['adj close'], 120)
 
-    plot_graph(forecast_ets, forecast_arima, forecast_xgboost, forecast_snaive, forecast_drift, forecast_average, test_data_serie)
+    plot_graph(forecast_ets, forecast_arima, forecast_xgboost, forecast_snaive, forecast_drift, forecast_average, validation_data['adj close'])
 
-    debug(test_data_serie, forecast_ets, forecast_arima, forecast_xgboost, forecast_snaive, forecast_drift, forecast_average, verbose=True)
+    debug(validation_data['adj close'], forecast_ets, forecast_arima, forecast_xgboost, forecast_snaive, forecast_drift, forecast_average, verbose=True)
 
 def ets(time_serie, Npt):
     #TODO: Fazer retornar os dados na forma de um pandas.Series
@@ -56,11 +50,6 @@ def xgboost(training_data, validation_data, ets, arima):
     tudo['arima'] = tudo['adj close']
     tudo['ets'].loc[(len(tudo) - len(ets)):] = ets
     tudo['arima'].loc[(len(tudo) - len(arima)):] = arima
-
-    colunasShift = ['adj close','ets', 'arima']
-    for item in colunasShift:
-        tudo[item] = tudo[item].shift(-120, fill_value=np.nan)
-
     tudo.drop(tudo.tail(120).index, inplace=True)
 
     training_data = tudo.drop(tudo.tail(120).index, inplace=False)
@@ -70,12 +59,12 @@ def xgboost(training_data, validation_data, ets, arima):
     train_features = training_data.drop(['adj close', 'ticker'], axis=1, inplace=False)
     test_features = validation_data.drop(['adj close', 'ticker'], axis=1, inplace=False)
 
-    return gst.grid_xgboost(training_data, validation_data, 120, str(training_data['ticker'][0]))
+    #gst.grid_xgboost(training_data, validation_data, 120, str(training_data['ticker'][0]))
 
     filename = '../../Resources/TunnedModels/'+ training_data['ticker'][0][:-3] +'_xgboost_31_07_covid.tmsave'
     xgbr = pickle.load(open(filename, 'rb'))
 
-    forecast_xgboost = xgbr.predict(test_features.astype('float'))
+    forecast_xgboost = xgbr.predict(test_features)
     return pd.Series(data=forecast_xgboost, index=validation_data.index)
 
 def debug(validation_data: pd.Series, forecast_ets: pd.Series, forecast_arima: pd.Series, forecast_xgboost: pd.DataFrame, forecast_snaive: pd.Series, forecast_drift: pd.Series, forecast_average: pd.Series, verbose: bool):

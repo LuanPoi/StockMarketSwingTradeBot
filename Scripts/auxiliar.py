@@ -49,7 +49,7 @@ ticker_selecionado = tickers['Petrobras']
 
 
 
-'''
+
 # ***************************************************************************************************************************************************************************************************************************************************************
 # *                              Tópico - Aquisição                                                     *
 # ***************************************************************************************************************************************************************************************************************************************************************
@@ -227,7 +227,7 @@ historico.to_csv(caminho_datasets+ticker_selecionado+'.csv', mode='a', sep=';', 
 historico.dtypes.to_csv(caminho_datasets+ticker_selecionado+'_metadata'+'.csv', mode='w', sep=';', header=False, index=True, quotechar='"', encoding='utf-8')
 
 historico = None
-'''
+
 # Carrega o dataframe e os dtypes dos arquivos .csv
 ticker_metadata = pd.read_csv(caminho_datasets+ticker_selecionado+'_metadata'+'.csv', sep=';', quotechar='"', names=['dtypes'], index_col=0).to_dict()['dtypes']
 historico = pd.read_csv(caminho_datasets+ticker_selecionado+'.csv', sep=';', header=0, index_col=0, quoting=csv.QUOTE_NONNUMERIC, dtype=ticker_metadata)
@@ -266,7 +266,7 @@ validacao = historico.tail(120)
 # ***************************************************************************************************************************************************************************************************************************************************************
 # *                              Tópico - ETS                                               *
 # ***************************************************************************************************************************************************************************************************************************************************************
-ets_pesos = smt.ExponentialSmoothing(endog=treino['adj close'], seasonal_periods=5, trend='mul', seasonal='add', damped_trend=True).fit(use_brute=True)
+ets_pesos = smt.ExponentialSmoothing(endog=treino['adj close'], seasonal_periods=5, trend='mul', seasonal='add', damped=True).fit(use_brute=True)
 ets_previsao = pd.Series([x for x in ets_pesos.forecast(120)], index=validacao.index)
 
 
