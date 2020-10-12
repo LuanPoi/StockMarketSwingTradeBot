@@ -22,6 +22,8 @@ tickers = {
         "Bovespa": "BOVA11.SA"
 }
 
+selected_ticker = tickers['Itau']
+
 def run():
     dataset_base_path = "../../Resources/Datasets/"
     # Popula o banco de dados
@@ -32,20 +34,19 @@ def run():
     # data = mySQLManager.read('select * from stock where ticker=\'' + tickers['Itau'] + '\'')
 
     # Popula o csv com os dados de todas as ações de uma vez
-    populate_csv(tickers, dataset_base_path)
+    # populate_csv(tickers, dataset_base_path)
     # Carrega os dados de todas as ações de um arquivo CSV e joga fora aquelas com ticker diferente do escolhido
     ticker_metadata = pd.read_csv(dataset_base_path + 'stock_metadata' + '.csv', sep=';', quotechar='"', names=['dtypes'], index_col=0).to_dict()['dtypes']
     data = pd.read_csv(dataset_base_path+'stock.csv', sep=';', header=0, index_col=0, quoting=csv.QUOTE_NONNUMERIC, dtype=ticker_metadata)
     data.index = pd.to_datetime(data.index)
-    print(data['adj close'].isna().sum())
-    data.drop(data[data['ticker'] != tickers['Petrobras']].index, inplace=True)
+    data = data.loc[data['ticker'] == selected_ticker]
 
     #Separa os dados entre treinamento e validação (dentro da data limite usada no documento)
     training_data = data.drop(data.tail(120).index, inplace=False)
     validation_data = data.tail(120)
 
-    training_data.set_index('Date', inplace=True)
-    validation_data.set_index('Date', inplace=True)
+    # training_data.set_index('Date', inplace=True)
+    # validation_data.set_index('Date', inplace=True)
 
     Trainer.run(training_data, validation_data)
 
@@ -252,7 +253,8 @@ def populate_csv(tickers: dict, base_path: str):
 
 def to_int(x):
     if not math.isnan(x):
-        return int(x)
+        r = float(x)
+        return r
 
 if __name__ == "__main__":
     run()

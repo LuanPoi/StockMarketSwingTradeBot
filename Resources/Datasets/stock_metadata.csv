@@ -4,7 +4,7 @@ high;float64
 low;float64
 close;float64
 adj close;float64
-volume;int64
+volume;float64
 volume_delta;float64
 open_2_s;float64
 open_2_d;float64

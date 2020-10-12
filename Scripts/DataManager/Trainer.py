@@ -59,7 +59,7 @@ def xgboost(training_data, validation_data, ets, arima):
     train_features = training_data.drop(['adj close', 'ticker'], axis=1, inplace=False)
     test_features = validation_data.drop(['adj close', 'ticker'], axis=1, inplace=False)
 
-    #gst.grid_xgboost(training_data, validation_data, 120, str(training_data['ticker'][0]))
+    gst.grid_xgboost(training_data, validation_data, 120, str(training_data['ticker'][0]))
 
     filename = '../../Resources/TunnedModels/'+ training_data['ticker'][0][:-3] +'_xgboost_31_07_covid.tmsave'
     xgbr = pickle.load(open(filename, 'rb'))
