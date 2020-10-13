@@ -10,7 +10,23 @@ import csv
 import sys
 import math
 
+import pandas_datareader as pdr
+import yfinance as yf
+import statsmodels as sm
+import matplotlib as mpl
+
 sys.setrecursionlimit(50000)
+
+print(
+    "Configuracoes:\n"
+    + "pdr: " + pdr.__version__ + "\n"
+    + "pandas: " + pd.__version__ + "\n"
+    + "numpy: " + np.__version__ + "\n"
+    + "yfinance: " + yf.__version__ + "\n"
+    + "statsmodels: " + sm.__version__ + "\n"
+    + "matplotlib: " + mpl.__version__ + "\n"
+    #+ ": " +  + "\n"
+)
 
 tickers = {
         "Inter": "BIDI4.SA",
@@ -21,8 +37,6 @@ tickers = {
         "Sinqia": "SQIA3.SA",
         "Bovespa": "BOVA11.SA"
 }
-
-selected_ticker = tickers['Itau']
 
 def run():
     dataset_base_path = "../../Resources/Datasets/"
@@ -257,4 +271,5 @@ def to_int(x):
         return r
 
 if __name__ == "__main__":
-    run()
+    for selected_ticker in tickers.values():
+        run()

@@ -1,42 +1,80 @@
-from Scripts.DataManager.BaseLines import average, seasonal_naive, drift
-import Scripts.DataManager.GSCV_tests as gst
-from statsmodels.tsa.api import ExponentialSmoothing
-from statsmodels.tsa.api import ARIMA
-from statsmodels.tools.eval_measures import rmse, meanabs
-from pandas import DataFrame
-import xgboost as xgb
-import numpy as np
-import pandas as pd
 import Scripts.Tools.eval as eval
-import plotly.offline as py
-import plotly.graph_objs as go
-
+import csv
 import pickle
+import pandas as pd
+import xgboost as xgb
+from Scripts.DataManager.BaseLines import average, seasonal_naive, drift
+from pandas import DataFrame
+from statsmodels.tools.eval_measures import rmse, meanabs
+from statsmodels.tsa.api import ARIMA
+from statsmodels.tsa.api import ExponentialSmoothing
+import Scripts.DataManager.GSCV_tests as gst
+import matplotlib.pyplot as plt
+
+
 
 def run(training_data: pd.DataFrame, validation_data: pd.DataFrame):
 
-    forecast_ets = ets(training_data['adj close'], 120)
+    #------------ Brute force tunning ----------------------
+    pc = 0
+    p_values = range(0, 10)
+    d_values = range(0, 3)
+    q_values = range(0, 10)
+    best_score, best_cfg = float("inf"), None
+    for p in p_values:
+        for d in d_values:
+            for q in q_values:
+                order = (p, d, q)
+                try:
+                    pc = pc + 1
+                    mase = eval.mase(validation_data['adj close'].values, arima(training_data['adj close'], 120, order, training_data['ticker'][0], False), 5)
+                    if mase < best_score:
+                        best_score, best_cfg = mase, order
+                    print(('Teste %d - ARIMA%s MSE=%.3f' % (pc, order, mase)))
+                except:
+                    continue
+    print('Best ARIMA%s MSE=%.3f' % (best_cfg, best_score))
+    return
+    #----------------------------------
+
+    forecast_ets = ets(training_data['adj close'], 120, training_data['ticker'][0])
     forecast_ets.index = validation_data.index
-    forecast_arima = arima(training_data['adj close'], 120)
+    forecast_arima = arima(training_data['adj close'], 120, best_cfg, training_data['ticker'][0], True) # outros valores bons(1,0,1), (1,0,0), (2,0,1)
     forecast_arima.index = validation_data.index
     forecast_xgboost = xgboost(training_data, validation_data, ets=forecast_ets, arima=forecast_arima)
+    forecast_xgboost.index = validation_data.index
     forecast_snaive = seasonal_naive(training_data['adj close'], 5, 120)
+    forecast_snaive.index = validation_data.index
     forecast_drift = drift(training_data['adj close'], 120)
+    forecast_drift.index = validation_data.index
     forecast_average = average(training_data['adj close'], 120)
+    forecast_average.index = validation_data.index
 
-    plot_graph(forecast_ets, forecast_arima, forecast_xgboost, forecast_snaive, forecast_drift, forecast_average, validation_data['adj close'])
+    result = pd.concat([forecast_ets, forecast_arima, forecast_xgboost, forecast_snaive, forecast_drift, forecast_average, validation_data['adj close']], axis=1, sort=False)
+    result.columns = ['ETS', 'ARIMA', 'XGBoost', 'SNaive', 'Drift', 'Average', 'Real Values']
 
-    debug(validation_data['adj close'], forecast_ets, forecast_arima, forecast_xgboost, forecast_snaive, forecast_drift, forecast_average, verbose=True)
+    eval_result = evaluation(validation_data['adj close'], forecast_ets, forecast_arima, forecast_xgboost, forecast_snaive, forecast_drift, forecast_average, verbose=True)
 
-def ets(time_serie, Npt):
-    #TODO: Fazer retornar os dados na forma de um pandas.Series
-    ets_fit = ExponentialSmoothing(endog=time_serie.values.astype('float'), seasonal_periods=5, trend='mul', seasonal='add', damped=True).fit()
+    save_result_stats(result, eval_result, training_data['ticker'][0])
+
+def ets(time_serie, Npt, simple_ticker):
+    ets_fit = ExponentialSmoothing(endog=time_serie.values.astype('float'), seasonal_periods=5, trend='mul', seasonal='add', damped=True).fit(use_brute=True)
+    # save the model to disk
+    filename = '../../Resources/TunnedModels/' + simple_ticker + '_ets_2020_07_31.pickle'
+    pickle.dump(ets_fit, open(filename, 'wb'))
+    # # load the model from disk
+    # ets_fit = pickle.load(open(filename, 'rb'))
     forecast_ets = [x for x in ets_fit.forecast(Npt)]
     return pd.Series(forecast_ets)
 
-def arima(time_serie, Npt):
-    # TODO: Fazer retornar os dados na forma de um pandas.Series
-    arima_fit = ARIMA(time_serie.values.astype('float'), (0, 0, 1)).fit(disp=False)
+def arima(time_serie, Npt, order, simple_ticker, write):
+    arima_fit = ARIMA(time_serie.values.astype('float'), order).fit(disp=False)
+    if write:
+        # save the model to disk
+        filename = '../../Resources/TunnedModels/' + simple_ticker + '_arima_2020_07_31.pickle'
+        pickle.dump(arima_fit, open(filename, 'wb'))
+        # # load the model from disk
+        # arima_fit = pickle.load(open(filename, 'rb'))
     forecast_arima = [x for x in arima_fit.forecast(Npt)[0]] # [0]= predições
     return pd.Series(forecast_arima)
 
@@ -61,13 +99,13 @@ def xgboost(training_data, validation_data, ets, arima):
 
     gst.grid_xgboost(training_data, validation_data, 120, str(training_data['ticker'][0]))
 
-    filename = '../../Resources/TunnedModels/'+ training_data['ticker'][0][:-3] +'_xgboost_31_07_covid.tmsave'
+    filename = '../../Resources/TunnedModels/'+ training_data['ticker'][0][:-3] +'_xgboost_31_07_covid.pickle'
     xgbr = pickle.load(open(filename, 'rb'))
 
     forecast_xgboost = xgbr.predict(test_features)
     return pd.Series(data=forecast_xgboost, index=validation_data.index)
 
-def debug(validation_data: pd.Series, forecast_ets: pd.Series, forecast_arima: pd.Series, forecast_xgboost: pd.DataFrame, forecast_snaive: pd.Series, forecast_drift: pd.Series, forecast_average: pd.Series, verbose: bool):
+def evaluation(validation_data: pd.Series, forecast_ets: pd.Series, forecast_arima: pd.Series, forecast_xgboost: pd.Series, forecast_snaive: pd.Series, forecast_drift: pd.Series, forecast_average: pd.Series, verbose: bool):
 
     print("\tPrediction model\t\t|\tRMSE\t\t\t\t|\tMAE\t\t\t\t\t|\tSeasonal MASE\t\t|\tSMAPE")
     print("\t-------------------------------------------------------------------------------------------------")
@@ -149,14 +187,27 @@ def debug(validation_data: pd.Series, forecast_ets: pd.Series, forecast_arima: p
         print(ar[2], end="\t|\t")
         print(ar[3])
 
-    result = DataFrame ([sn, df, av, xgb, ets, ar], index = ['seasonal_naive','drift','average','xgboost','ets','arima'],columns = ['RMSE','MAE','MASE', 'sMAPE'])
-    return result
+    eval_results = DataFrame ([sn, df, av, xgb, ets, ar], index = ['seasonal_naive','drift','average','xgboost','ets','arima'],columns = ['RMSE','MAE','MASE', 'sMAPE'])
+    return eval_results
 
-def plot_graph(forecast_ets, forecast_arima, forecast_xgboost, forecast_snaive, forecast_drift, forecast_average, test_data_serie):
-    # Gráfico usando apenas marcadores
-    trace1 = go.Scatter(x=['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio'],
-                        y=[10, 9, 11, 8, 12],
-                        mode='lines',
-                        name='Gráfico com linhas tracejadas',
-                        line={'color': '#ee5253',
-                              'dash': 'dash'})
+def save_result_stats(forecasts: DataFrame, evaluations: DataFrame, ticker):
+    eval_path = '../../Evaluations/'
+
+    # Salva os dados em um arquivo .csv
+    forecasts.to_csv(eval_path + ticker + '_2020_07_31' + '_forecasts.csv', mode='w', sep=';', na_rep='', header=True, index=True, date_format='%Y-%m-%d', decimal='.', quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8')
+    evaluations.to_csv(eval_path + ticker + '_2020_07_31' + '_evaluations.csv', mode='w', sep=';', na_rep='', header=True, index=True, date_format='%Y-%m-%d', decimal='.', quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8')
+
+    # #
+    # # gca stands for 'get current axis'
+    # ax = plt.gca()
+    #
+    # forecasts['Real Values'].plot(kind='line', y='Real Values', color='black', ax=ax)
+    # forecasts['ETS'].plot(kind='line', y='ETS', color='red', ax=ax)
+    # forecasts['ARIMA'].plot(kind='line', y='ARIMA', color='green', ax=ax)
+    # forecasts['XGBoost'].plot(kind='line', y='XGBoost', color='blue', ax=ax)
+    # forecasts['SNaive'].plot(kind='line', y='SNaive', color='purple', ax=ax)
+    # forecasts['Drift'].plot(kind='line', y='Drift', color='pink', ax=ax)
+    # forecasts['Average'].plot(kind='line', y='Average', color='brown', ax=ax)
+    #
+    # plt.show()
+    # print("fim")

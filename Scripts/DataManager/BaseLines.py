@@ -8,7 +8,7 @@ def average(x: Series, h: int) -> np.ndarray:
     # h : number of future predictions
     # equation : Ŷ = (Y1 + ... + Yt) / t
     result = np.full(h, x.mean())
-    return result
+    return Series(result)
 
 
 def seasonal_naive(x: Series, s: int, h: int) -> np.ndarray:
@@ -20,7 +20,7 @@ def seasonal_naive(x: Series, s: int, h: int) -> np.ndarray:
     result = []
     for t in range(h):
         result.append(tail[t % s])
-    return np.array(result)
+    return Series(np.array(result))
 
 
 def drift(x: Series, h: int) -> np.ndarray:
@@ -31,4 +31,4 @@ def drift(x: Series, h: int) -> np.ndarray:
     result = []
     for t in range(h):
         result.append(x.get(x.last_valid_index()) + ((t + 1) * diffRate))
-    return np.array(result)
+    return Series(np.array(result))
