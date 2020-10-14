@@ -10,7 +10,7 @@ import sklearn
 
 metricas = ['max_error', 'neg_mean_absolute_error', 'neg_mean_squared_error', 'neg_root_mean_squared_error', 'neg_median_absolute_error']
 
-def grid_xgboost(training_data, validation_data, Npt, simple_ticker):
+def grid_xgboost(training_data, validation_data, Npt, simple_ticker, fit: bool, save: bool):
     xgbr = xgb.XGBRegressor()
 
     hyper = {
@@ -44,11 +44,9 @@ def grid_xgboost(training_data, validation_data, Npt, simple_ticker):
     grid = GridSearchCV(xgbr, param_grid=hyper, scoring=metricas, verbose=1, refit='neg_root_mean_squared_error', return_train_score=False, n_jobs=-1)
     grid.fit(X=train_features.astype('float'), y=train_target.astype('float'))
 
-    # save the model to disk
-    filename = '../../Resources/TunnedModels/'+simple_ticker+'_xgboost_2020_07_31.pickle'
-    pickle.dump(grid.best_estimator_, open(filename, 'wb'))
+    if save:
+        # save the model to disk
+        filename = '../../Resources/TunnedModels/'+simple_ticker+'_xgboost_2019_12_31.pickle'
+        pickle.dump(grid.best_estimator_, open(filename, 'wb'))
 
-    print("----------------best estimator-------------------")
-    print(pd.DataFrame(grid.cv_results_))
-    print("----------------best estimator-------------------")
-    return
+    return grid.best_estimator_
