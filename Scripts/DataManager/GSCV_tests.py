@@ -46,7 +46,8 @@ def grid_xgboost(training_data, validation_data, Npt, simple_ticker, fit: bool, 
 
     if save:
         # save the model to disk
-        filename = '../../Resources/TunnedModels/'+simple_ticker+'_xgboost_2019_12_31.pickle'
+        filename = '../../Resources/TunnedModels/'+simple_ticker+'_xgboost_2020_07' \
+                                                                 '_31.pickle'
         pickle.dump(grid.best_estimator_, open(filename, 'wb'))
 
     return grid.best_estimator_

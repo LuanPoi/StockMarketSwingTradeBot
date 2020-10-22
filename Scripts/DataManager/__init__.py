@@ -107,7 +107,6 @@ def populate_mysql(tickers: dict):
 
 
 def stock_stats(data_frame: pd.DataFrame):
-    # TODO: Melhorar as features obtidas adicionando algumas mais úteis.
     stock = StockDataFrame.retype(data_frame)
 
     data = {
@@ -240,8 +239,8 @@ def populate_csv(tickers: dict, base_path: str):
             test_data = processed_data.drop(processed_data[processed_data.index <= datetime(2020,7,31)].index, inplace=False)
 
             # Salva os dataframes em CSV (Sobrescreve se o arquivo ja existir)
-            training_data.to_csv(base_path+'stock.csv', mode='a', sep=';', na_rep='', header=True, index=True, date_format='%Y-%m-%d', decimal='.', quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8')
-            test_data.to_csv(base_path + 'stock_test.csv', mode='a', sep=';', na_rep='', header=True, index=True, date_format='%Y-%m-%d', decimal='.', quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8')
+            training_data.to_csv(base_path+'stock.csv', mode='w', sep=';', na_rep='', header=True, index=True, date_format='%Y-%m-%d', decimal='.', quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8')
+            test_data.to_csv(base_path + 'stock_test.csv', mode='w', sep=';', na_rep='', header=True, index=True, date_format='%Y-%m-%d', decimal='.', quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8')
             training_data.dtypes.to_csv(base_path + 'stock_metadata' + '.csv', mode='w', sep=';', header=False, index=True, quotechar='"', encoding='utf-8')
 
             toggle = False

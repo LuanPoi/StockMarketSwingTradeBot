@@ -22,26 +22,26 @@ def run(training_data: pd.DataFrame, validation_data: pd.DataFrame):
     d_values = range(0, 3)
     q_values = range(0, 10)
     best_score, best_cfg = float("inf"), None
-    for p in p_values:
-        for d in d_values:
-            for q in q_values:
-                order = (p, d, q)
-                try:
-                    pc = pc + 1
-                    mase = eval.mase(validation_data['adj close'].values, arima(training_data['adj close'], 120, order, training_data['ticker'][0], fit=True, save=False, load=False), 5)
-                    if mase < best_score:
-                        best_score, best_cfg = mase, order
-                    print(('Teste %d - ARIMA%s MSE=%.3f' % (pc, order, mase)))
-                except:
-                    continue
-    print('Best ARIMA%s MSE=%.3f' % (best_cfg, best_score))
+    # for p in p_values:
+    #     for d in d_values:
+    #         for q in q_values:
+    #             order = (p, d, q)
+    #             try:
+    #                 pc = pc + 1
+    #                 mase = eval.mase(validation_data['adj close'].values, arima(training_data['adj close'], 120, order, training_data['ticker'][0], fit=True, save=False, load=False), 5)
+    #                 if mase < best_score:
+    #                     best_score, best_cfg = mase, order
+    #                 print(('Teste %d - ARIMA%s MSE=%.3f' % (pc, order, mase)))
+    #             except:
+    #                 continue
+    # print('Best ARIMA%s MSE=%.3f' % (best_cfg, best_score))
     #----------------------------------
 
-    forecast_ets = ets(training_data['adj close'], 120, training_data['ticker'][0], fit=True, save=True, load=True)
+    forecast_ets = ets(training_data['adj close'], 120, training_data['ticker'][0], fit=False, save=False, load=True)
     forecast_ets.index = validation_data.index
-    forecast_arima = arima(training_data['adj close'], 120, order, training_data['ticker'][0], fit=True, save=True, load=True) # outros valores bons(1,0,1), (1,0,0), (2,0,1)
+    forecast_arima = arima(training_data['adj close'], 120, best_cfg, training_data['ticker'][0], fit=False, save=False, load=True) # outros valores bons(1,0,1), (1,0,0), (2,0,1)
     forecast_arima.index = validation_data.index
-    forecast_xgboost = xgboost(training_data, validation_data, ets=forecast_ets, arima=forecast_arima, fit=True, save=True, load=True)
+    forecast_xgboost = xgboost(training_data, validation_data, ets=forecast_ets, arima=forecast_arima, fit=False, save=False, load=True)
     forecast_xgboost.index = validation_data.index
     forecast_snaive = seasonal_naive(training_data['adj close'], 5, 120)
     forecast_snaive.index = validation_data.index
@@ -53,12 +53,13 @@ def run(training_data: pd.DataFrame, validation_data: pd.DataFrame):
     result = pd.concat([forecast_ets, forecast_arima, forecast_xgboost, forecast_snaive, forecast_drift, forecast_average, validation_data['adj close']], axis=1, sort=False)
     result.columns = ['ETS', 'ARIMA', 'XGBoost', 'SNaive', 'Drift', 'Average', 'Real Values']
 
+    print("Ação: " + str(training_data['ticker'][0]))
     eval_result = evaluation(validation_data['adj close'], forecast_ets, forecast_arima, forecast_xgboost, forecast_snaive, forecast_drift, forecast_average, verbose=True)
 
     save_result_stats(result, eval_result, training_data['ticker'][0])
 
 def ets(time_serie, Npt, simple_ticker, fit: bool, save: bool, load: bool):
-    filename = '../../Resources/TunnedModels/' + simple_ticker + '_ets_2019_12_31.pickle'
+    filename = '../../Resources/TunnedModels/' + simple_ticker + '_ets_2020_07_31.pickle'
     if fit:
         ets_fit = ExponentialSmoothing(endog=time_serie.values.astype('float'), seasonal_periods=5, trend='mul', seasonal='add', damped=True).fit(use_brute=True)
         if save:
@@ -74,7 +75,7 @@ def ets(time_serie, Npt, simple_ticker, fit: bool, save: bool, load: bool):
     return pd.Series(forecast_ets)
 
 def arima(time_serie, Npt, order, simple_ticker, fit: bool, save: bool, load: bool):
-    filename = '../../Resources/TunnedModels/' + simple_ticker + '_arima_2019_12_31.pickle'
+    filename = '../../Resources/TunnedModels/' + simple_ticker + '_arima_2020_07_31.pickle'
     if fit:
         arima_fit = ARIMA(time_serie.values.astype('float'), order).fit(disp=False)
         if save:
@@ -111,7 +112,7 @@ def xgboost(training_data, validation_data, ets, arima, fit: bool, save: bool, l
     if fit:
         xgbr = gst.grid_xgboost(training_data, validation_data, 120, str(training_data['ticker'][0]), fit, save)
     elif load:
-        filename = '../../Resources/TunnedModels/'+ training_data['ticker'][0] +'_xgboost_2019_12_31.pickle'
+        filename = '../../Resources/TunnedModels/'+ training_data['ticker'][0] +'_xgboost_2020_07_31.pickle'
         xgbr = pickle.load(open(filename, 'rb'))
     else:
         print("Error: fit and load parameters are both false.")
@@ -209,5 +210,5 @@ def save_result_stats(forecasts: DataFrame, evaluations: DataFrame, ticker):
     eval_path = '../../Evaluations/'
 
     # Salva os dados em um arquivo .csv
-    forecasts.to_csv(eval_path + ticker + '_2019_12_31' + '_forecasts.csv', mode='w', sep=';', na_rep='', header=True, index=True, date_format='%Y-%m-%d', decimal='.', quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8')
-    evaluations.to_csv(eval_path + ticker + '_2019_12_31' + '_evaluations.csv', mode='w', sep=';', na_rep='', header=True, index=True, date_format='%Y-%m-%d', decimal='.', quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8')
+    forecasts.to_csv(eval_path + ticker + '_2020_07_31' + '_forecasts.csv', mode='w', sep=';', na_rep='', header=True, index=True, date_format='%Y-%m-%d', decimal='.', quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8')
+    evaluations.to_csv(eval_path + ticker + '_2020_07_31' + '_evaluations.csv', mode='w', sep=';', na_rep='', header=True, index=True, date_format='%Y-%m-%d', decimal='.', quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8')

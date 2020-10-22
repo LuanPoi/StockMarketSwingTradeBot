@@ -16,7 +16,7 @@ tickers = {
 for ticker in tickers.values():
     eval_path = '../../Evaluations/'
 
-    evaluations = pd.read_csv(eval_path + ticker + '_2019_12_31' + '_evaluations.csv', sep=';', decimal='.', header=0, index_col=0, quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8')
+    evaluations = pd.read_csv(eval_path + ticker + '_2020_07_31' + '_evaluations.csv', sep=';', decimal='.', header=0, index_col=0, quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8')
 
     indexes = ['seasonal_naive', 'drift', 'average']
 

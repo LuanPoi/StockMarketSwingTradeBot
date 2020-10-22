@@ -1,4 +1,26 @@
 from tkinter import *
+from datetime import datetime
+import pandas as pd
+import numpy as np
+from stockstats import StockDataFrame
+import csv
+import sys
+import math
+
+import pandas_datareader as pdr
+import yfinance as yf
+import statsmodels as sm
+import matplotlib as mpl
+
+tickers = {
+    "Inter": "BIDI4.SA",
+    "Petrobras": "PETR4.SA",
+    "Vale": "VALE3.SA",
+    "Itau": "ITUB4.SA",
+    "Ambev": "ABEV3.SA",
+    "Sinqia": "SQIA3.SA",
+    "Bovespa": "BOVA11.SA"
+}
 
 class Application:
     def __init__(self, master=None):
@@ -16,40 +38,58 @@ class Application:
         self.terceiroContainer.pack()
 
         self.quartoContainer = Frame(master)
-        self.quartoContainer["pady"] = 20
+        self.quartoContainer["padx"] = 20
         self.quartoContainer.pack()
 
-        self.titulo = Label(self.primeiroContainer, text="Dados do usuário")
+        self.ultimoContainer = Frame(master)
+        self.ultimoContainer["pady"] = 20
+        self.ultimoContainer.pack()
+
+        #---------------------------------------
+
+        self.titulo = Label(self.primeiroContainer, text="Simulador de investimentos simples")
         self.titulo["font"] = ("Arial", "10", "bold")
         self.titulo.pack()
 
-        self.nomeLabel = Label(self.segundoContainer,text="Nome", font=self.fontePadrao)
-        self.nomeLabel.pack(side=LEFT)
+        # ---------------------------------------
+        self.acaoLabel = Label(self.segundoContainer, text="Ação", font=self.fontePadrao)
+        self.acaoLabel.pack(side=LEFT)
 
-        self.nome = Entry(self.segundoContainer)
-        self.nome["width"] = 30
-        self.nome["font"] = self.fontePadrao
-        self.nome.pack(side=LEFT)
+        self.acao_selecionada = StringVar(self.segundoContainer)
+        self.acao_selecionada.set("BIDI4")
+        self.acao = OptionMenu(self.segundoContainer, self.acao_selecionada, "PETR4", "VALE3", "ITUB4", "ABEV3", "SQIA3", "BOVA11")
+        self.acao.config(width=10, font=('Helvetica', 12))
+        self.acao.pack()
+        self.acao_selecionada.trace("w", self.pegaValorDaAcao)
 
-        self.senhaLabel = Label(self.terceiroContainer, text="Senha", font=self.fontePadrao)
-        self.senhaLabel.pack(side=LEFT)
+        # ---------------------------------------
 
-        self.senha = Entry(self.terceiroContainer)
-        self.senha["width"] = 30
-        self.senha["font"] = self.fontePadrao
-        self.senha["show"] = "*"
-        self.senha.pack(side=LEFT)
+        valor_acao_label = Label(self.terceiroContainer, text="Ação", font=self.fontePadrao)
+        self.acaoLabel.pack(side=LEFT)
 
-        self.autenticar = Button(self.quartoContainer)
-        self.autenticar["text"] = "Autenticar"
+        # ---------------------------------------
+
+        self.valorLabel = Label(self.quartoContainer,text="Esta ação esta custando: ", font=self.fontePadrao)
+        self.valorLabel.pack(side=LEFT)
+
+        self.valor = Entry(self.quartoContainer)
+        self.valor["width"] = 30
+        self.valor["font"] = self.fontePadrao
+        self.valor.pack(side=LEFT)
+
+        # ---------------------------------------
+
+        self.autenticar = Button(self.ultimoContainer)
+        self.autenticar["text"] = "Investir"
         self.autenticar["font"] = ("Calibri", "8")
         self.autenticar["width"] = 12
         self.autenticar["command"] = self.verificaSenha
         self.autenticar.pack()
 
-        self.mensagem = Label(self.quartoContainer, text="", font=self.fontePadrao)
+        self.mensagem = Label(self.ultimoContainer, text="", font=self.fontePadrao)
         self.mensagem.pack()
 
+    #TODO:
     #Método verificar senha
     def verificaSenha(self):
         usuario = self.nome.get()
@@ -58,6 +98,19 @@ class Application:
             self.mensagem["text"] = "Autenticado"
         else:
             self.mensagem["text"] = "Erro na autenticação"
+
+    def pegaValorDaAcao(self, *args):
+        dataset_base_path = "../../Resources/Datasets/"
+        ticker_metadata = \
+            pd.read_csv(dataset_base_path + 'stock_metadata' + '.csv', sep=';', quotechar='"', names=['dtypes'],
+                        index_col=0).to_dict()['dtypes']
+        data = pd.read_csv(dataset_base_path + 'stock.csv', sep=';', header=0, index_col=0,
+                           quoting=csv.QUOTE_NONNUMERIC,
+                           dtype=ticker_metadata)
+        data.index = pd.to_datetime(data.index)
+        data = data.loc[data['ticker'] == (self.acao_selecionada.get()+'.SA')]
+        training_data = float(data['adj close'].tail(1))
+        self.valorLabel.config(text="Esta ação esta custando: {}".format(training_data))
 
 
 root = Tk()
