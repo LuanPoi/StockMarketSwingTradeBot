@@ -3,18 +3,8 @@ import pandas as pd
 import numpy as np
 import csv
 
-
-tickers = {
-        "Inter": "BIDI4.SA",
-        "Petrobras": "PETR4.SA",
-        "Vale": "VALE3.SA",
-        "Itau": "ITUB4.SA",
-        "Ambev": "ABEV3.SA",
-        "Sinqia": "SQIA3.SA",
-        "Bovespa": "BOVA11.SA"
-}
-for ticker in tickers.values():
-    eval_path = '../../Evaluations/'
+def run(ticker, path):
+    eval_path = path+'/Evaluations/'
 
     evaluations = pd.read_csv(eval_path + ticker + '_2020_07_31' + '_evaluations.csv', sep=';', decimal='.', header=0, index_col=0, quoting=csv.QUOTE_NONNUMERIC, encoding='utf-8')
 
@@ -65,7 +55,7 @@ for ticker in tickers.values():
     plt.ylabel('Erro percentual (%)')
     plt.show()
 
-    print(best_baseline[0] + " é o melhor.")
+    print(best_baseline[0] + " é o melhor baseline.")
 
     if best_baseline[0] == 'average':
         best_baseline[0] = 'Average'

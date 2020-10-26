@@ -10,7 +10,7 @@ import sklearn
 
 metricas = ['max_error', 'neg_mean_absolute_error', 'neg_mean_squared_error', 'neg_root_mean_squared_error', 'neg_median_absolute_error']
 
-def grid_xgboost(training_data, validation_data, Npt, simple_ticker, fit: bool, save: bool):
+def grid_xgboost(training_data, validation_data, Npt, simple_ticker, fit: bool, save: bool, path):
     xgbr = xgb.XGBRegressor()
 
     hyper = {
@@ -46,7 +46,7 @@ def grid_xgboost(training_data, validation_data, Npt, simple_ticker, fit: bool, 
 
     if save:
         # save the model to disk
-        filename = '../../Resources/TunnedModels/'+simple_ticker+'_xgboost_2020_07' \
+        filename = path+'/Resources/TunnedModels/'+simple_ticker+'_xgboost_2020_07' \
                                                                  '_31.pickle'
         pickle.dump(grid.best_estimator_, open(filename, 'wb'))
 

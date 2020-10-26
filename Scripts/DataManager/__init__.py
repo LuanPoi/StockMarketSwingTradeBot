@@ -10,36 +10,23 @@ import csv
 import sys
 import math
 
-import pandas_datareader as pdr
-import yfinance as yf
-import statsmodels as sm
-import matplotlib as mpl
-
 sys.setrecursionlimit(50000)
 
-print(
-    "Configuracoes:\n"
-    + "pdr: " + pdr.__version__ + "\n"
-    + "pandas: " + pd.__version__ + "\n"
-    + "numpy: " + np.__version__ + "\n"
-    + "yfinance: " + yf.__version__ + "\n"
-    + "statsmodels: " + sm.__version__ + "\n"
-    + "matplotlib: " + mpl.__version__ + "\n"
-    #+ ": " +  + "\n"
-)
-
 tickers = {
-        "Inter": "BIDI4.SA",
-        "Petrobras": "PETR4.SA",
-        "Vale": "VALE3.SA",
-        "Itau": "ITUB4.SA",
-        "Ambev": "ABEV3.SA",
-        "Sinqia": "SQIA3.SA",
-        "Bovespa": "BOVA11.SA"
+    "Inter": "BIDI4.SA",
+    "Petrobras": "PETR4.SA",
+    "Vale": "VALE3.SA",
+    "Itau": "ITUB4.SA",
+    "Ambev": "ABEV3.SA",
+    "Sinqia": "SQIA3.SA",
+    "Bovespa": "BOVA11.SA"
 }
 
-def run():
-    dataset_base_path = "../../Resources/Datasets/"
+
+def run(ticker, update, loadModels, path):
+    selected_ticker = ticker
+
+    dataset_base_path = path+"/Resources/Datasets/"
     # Popula o banco de dados
     # populate_mysql(tickers)
     # Carrega os dados de uma determinada ação do banco de dados
@@ -47,8 +34,10 @@ def run():
     # mySQLManager.connect('stock_market')
     # data = mySQLManager.read('select * from stock where ticker=\'' + tickers['Itau'] + '\'')
 
-    # Popula o csv com os dados de todas as ações de uma vez
-    # populate_csv(tickers, dataset_base_path)
+    if update:
+        # Popula o csv com os dados de todas as ações de uma vez
+        populate_csv(tickers, dataset_base_path)
+        return
     # Carrega os dados de todas as ações de um arquivo CSV e joga fora aquelas com ticker diferente do escolhido
     ticker_metadata = pd.read_csv(dataset_base_path + 'stock_metadata' + '.csv', sep=';', quotechar='"', names=['dtypes'], index_col=0).to_dict()['dtypes']
     data = pd.read_csv(dataset_base_path+'stock.csv', sep=';', header=0, index_col=0, quoting=csv.QUOTE_NONNUMERIC, dtype=ticker_metadata)
@@ -62,7 +51,7 @@ def run():
     # training_data.set_index('Date', inplace=True)
     # validation_data.set_index('Date', inplace=True)
 
-    Trainer.run(training_data, validation_data)
+    Trainer.run(training_data, validation_data, loadModels, path)
 
 
 
@@ -269,6 +258,6 @@ def to_int(x):
         r = float(x)
         return r
 
-if __name__ == "__main__":
-    for selected_ticker in tickers.values():
-        run()
+# if __name__ == "__main__":
+#     for selected_ticker in tickers.values():
+#         run()
